@@ -95,3 +95,15 @@ class TestAnswerGeneration:
         assert "2,500" in answer or "2500" in answer or "starter" in answer, (
             "Answer should address the pricing question"
         )
+
+class TestErrorHandling:
+    def test_empty_question_does_not_crash(self, vector_store, llm):
+        result = ask_question(vector_store, llm, "")
+        assert isinstance(result, dict)
+        assert "answer" in result
+        assert "sources" in result
+
+    def test_whitespace_only_question_does_not_crash(self, vector_store, llm):
+        result = ask_question(vector_store, llm, "   ")
+        assert isinstance(result, dict)
+        assert result["sources"] == []

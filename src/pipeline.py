@@ -13,14 +13,17 @@ Useful docs:
 """
 
 import os
+import argparse
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from src.knowledge_base import build_knowledge_base
+from typing import Callable, List, Dict
+
 
 
 # ──────────────────────────────────────────────
 # Provided: local LLM (no API key needed)
 # ──────────────────────────────────────────────
-def get_llm():
+def get_llm() -> Callable[[str], List[Dict[str, str]]]:
     """Return a callable local LLM using flan-t5-base.
 
     Downloads ~1GB on first run, then cached.
@@ -80,14 +83,21 @@ def ask_question(vector_store, llm, question: str) -> dict:
             "answer"  -> str: the generated answer
             "sources" -> list[str]: the chunk texts that were retrieved
     """
-    # TODO: implement this (~6-8 lines)
-    raise NotImplementedError("TODO 1: Implement ask_question")
+    if not question or not question.strip():
+        return {"answer": "Please enter a question.", "sources": []}
+    docs = vector_store.similarity_search(question, k=3)
+    sources = [doc.page_content for doc in docs]
+    context = "\n\n".join(sources)
+    prompt = PROMPT_TEMPLATE.format(context=context, question=question)
+    result = llm(prompt)
+    answer = result[0]["generated_text"]
 
+    return {"answer": answer, "sources": sources}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TODO 2: Complete the interactive loop
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def main():
+def main() -> None:
     """Interactive Q&A loop.
 
     Steps:
@@ -100,11 +110,45 @@ def main():
          - Calls ask_question() with their input
          - Prints the retrieved sources and the answer
     """
+    parser = argparse.ArgumentParser(description="Marketing agency Q&A chatbot")
+    parser.add_argument("--query", type=str, help="Ask a single question and exit")
+    args = parser.parse_args()
+
     data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
 
-    # TODO: implement this (~10-12 lines)
-    raise NotImplementedError("TODO 2: Complete the interactive loop")
+    if not os.path.isdir(data_dir):
+        print(f"Error: data directory not found at {data_dir}")
+        return
 
+    vector_store = build_knowledge_base(data_dir)
+    llm = get_llm()
+
+    if args.query:
+        result = ask_question(vector_store, llm, args.query)
+        print("\n📄 Sources:")
+        for i, source in enumerate(result["sources"], 1):
+            preview = source[:100].replace("\n", " ")
+            print(f"  {i}. {preview}...")
+        print(f"\n💬 Answer: {result['answer']}\n")
+        return
+
+    print("Ask me anything about our services! (type 'quit' to exit)\n")
+
+    while True:
+        question = input("> ").strip()
+        if question.lower() == "quit":
+            break
+        if not question:
+            continue
+
+        result = ask_question(vector_store, llm, question)
+
+        print("\n📄 Sources:")
+        for i, source in enumerate(result["sources"], 1):
+            preview = source[:100].replace("\n", " ")
+            print(f"  {i}. {preview}...")
+
+        print(f"\n💬 Answer: {result['answer']}\n")
 
 if __name__ == "__main__":
     main()
